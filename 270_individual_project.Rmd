@@ -28,12 +28,12 @@ The project must be submitted in the form of a Jupyter notebook or RMarkdown fil
 # check if you have installed all the required packages 
 # and install missing packages
 list.of.packages <- c("ggplot2", "tidyverse", "stringr", "zoo", "lubridate",
-                      "kableExtra", "magick")
+                      "kableExtra", "magick", "usmap", "maps", "webshot")
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 
 if(length(new.packages)) install.packages(new.packages)
 
-webshot::install_phantomjs()
+#webshot::install_phantomjs()
 
 # Load libraries
 library(ggplot2)
@@ -43,6 +43,8 @@ library(zoo)
 library(lubridate)
 library(kableExtra)
 library(magick)
+library(webshot)
+
 ```
 
 Tips:
@@ -82,7 +84,6 @@ dim(nyt)
 head(nyt)
 ```
 
-________________________________
 
 ### <span style="color: red;">My Code for task 1</span>
 
@@ -177,12 +178,11 @@ ggsave(filename = "task1.png", plot = plot_task1,
   
 ```
 
-
+____________________
 
 #### Task #2 
 Create the table of cases and deaths - the first table on the page, right below the figure you created in task #1. You don't need to include tests or hospitalizations. 
 
-____________________
 
 ### <span style="color: red;">My Code for task 2</span>
 
@@ -228,7 +228,7 @@ save_kable(table_task2, "reproduced_figures/task2.png", zoom = 1.5)
 ```
 
 
-
+______________________________
 
 ![](original_figures/nyt2.png){ width=75% }
 
@@ -240,7 +240,7 @@ Create the county-level map for previous week ('Hot spots') - the second plot on
 
 Code to wrangle county population data and map data.
 
-```{r}
+```{r, message = FALSE, warning=FALSE}
 # Get US county populations from census
 county_pop <- as.data.frame(data.table::fread("https://www2.census.gov/programs-surveys/popest/datasets/2010-2019/counties/totals/co-est2019-alldata.csv"))
 ```
@@ -279,30 +279,80 @@ head(counties)
 ```{r}
 # Wrangle NYT data to match counties data frame.
 
-nyt <- nyt %>% rename(region = state,
+nyt_task3 <- nyt %>% rename(region = state,
                       subregion = county) %>%
   mutate(region = str_to_lower(region),
          subregion = str_to_lower(subregion),
          subregion = str_replace(subregion, "\\.", ""),) 
 
-head(nyt)
+head(nyt_task3)
 
 # Calculate average daily cases for the plot - remember to group by region, subregion, and date. Then filter to only include the date 2022-01-12.
 
 # Your code here
+
 ```
+
+#### <span style="color: red;">My Code for task 3: calculate daily average case per 100,000 people for each subregion on 2022-01-12</span>
+
+```{r}
+nyt_task3_1 <- nyt_task3 %>% 
+  
+  # calculate new daily cases
+  group_by(subregion, region) %>% 
+  arrange(date) %>% 
+  mutate(new_cases = cases - lag(cases)) %>%
+  
+  # filter data for 2022-01-12
+  filter(date == "2022-01-12") %>% 
+  
+  left_join(county_pop,  by = c("region", "subregion")) %>%
+  
+  # calculate daily average cases for 100,000 people for each subregion
+  mutate(avg_cases = new_cases/population*100000) 
+  
+```
+
+#### <span style="color: red;">My Code for task 3: merge daily average per 100k people with the counties data frame </span>
 
 ```{r}
 # Merge your updated nyt data frame and counties data frame by joining by region and subregion. 
 
+nyt_task3_2 <- nyt_task3_1 %>% select(!c(fips, deaths, population)) %>%
+  left_join(counties, by = c("region", "subregion")) %>% 
+  mutate(avg_cases_group = ceiling(avg_cases/15),
+         avg_cases_group = ifelse(avg_cases_group > 10 & avg_cases_group <= 25, 
+                                  11, avg_cases_group),
+         avg_cases_group = ifelse(avg_cases_group > 25, 12, avg_cases_group),
+          avg_cases_group = ifelse(avg_cases_group <= 0 | 
+                                     is.na(avg_cases_group), 0, avg_cases_group)#,
+         #avg_cases_group = as.factor(avg_cases_group)
+         ) 
+  
+
+head(nyt_task3_2)
 ```
 
 Mapping US state counties is possible using the `maps` package by using `map_data("county")`. Here we choose a red outline and no fill color. You will need to fill the counties with the average number of daily cases per capita and can change the outline color to white. 
 
-```{r}
+```{r, warning = FALSE}
 AllCounty <- map_data("county")
 AllCounty %>% ggplot(aes(x = long, y = lat, group = group)) +
               geom_polygon(color = "red", fill = NA, size = .1 )
+```
+#### <span style="color: red;">My Code for task 3: create the map </span>
+
+```{r}
+plot_task3 <- nyt_task3_2 %>% ggplot(aes(x = long, y = lat, group = group)) +
+              #geom_polygon(color = "red", fill = NA, size = .1 ) +
+geom_polygon(color = "white", aes(fill =avg_cases_group), size = 0,
+             data = nyt_task3_2)  +
+  scale_fill_viridis_c() +
+  theme_void()
+
+
+plot_task3
+
 ```
 
 
