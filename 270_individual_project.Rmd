@@ -8,7 +8,7 @@ urlcolor: blue
 
 In May 2020, the Georgia Department of Public Health posted the following plot to illustrate the number of confirmed COVID-19 cases in their hardest-hit counties over a two-week period. Health officials claimed that the plot provided evidence that COVID-19 cases were decreasing and made the argument for reopening the state.
 
-![](georgia.png){ width=75% }
+![](original_figures/georgia.png){ width=75% }
 
 The plot was heavily criticized by the statistical community and several media outlets for its deceptive portrayal of COVID-19 trends in Georgia. Whether the end result was due to malicious intent or simply poor judgment, it is incredibly irresponsible to publish data visualizations that obscure and distort the truth. 
 
@@ -25,6 +25,16 @@ Data for cases and deaths can be downloaded from this [NYT GitHub repository](ht
 The project must be submitted in the form of a Jupyter notebook or RMarkdown file and corresponding compiled/knitted PDF, with commented code and text interspersed, including a **brief critique of the reproducibility of each plot and table**. All project documents must be uploaded to a GitHub repository each student will create within the [reproducible data science organization](https://github.com/reproducibleresearch). The repository must also include a README file describing the contents of the repository and how to reproduce all results. You should keep in mind the file and folder structure we covered in class and make the reproducible process as automated as possible.
 
 ```{r, warning=FALSE, echo=FALSE, message=FALSE}
+# check if you have installed all the required packages 
+# and install missing packages
+list.of.packages <- c("ggplot2", "tidyverse", "stringr", "zoo", "lubridate",
+                      "kableExtra", "magick")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+
+if(length(new.packages)) install.packages(new.packages)
+
+webshot::install_phantomjs()
+
 # Load libraries
 library(ggplot2)
 library(tidyverse)
@@ -32,6 +42,7 @@ library(stringr)
 library(zoo)
 library(lubridate)
 library(kableExtra)
+library(magick)
 ```
 
 Tips:
@@ -59,7 +70,7 @@ new_cases_7dayavg
 
 Create the new cases as a function of time with a rolling average plot - the first plot on the page (you don't need to recreate the colors or theme).
 
-![](nyt1.png)
+![](original_figures/nyt1.png)
 
 Code to read in the data and get you started.
 
@@ -71,18 +82,161 @@ dim(nyt)
 head(nyt)
 ```
 
+________________________________
+
+### <span style="color: red;">My Code for task 1</span>
+
+```{r, warning = FALSE, message=FALSE}
+# create data set for task 1
+df_task1 <- nyt %>% 
+   group_by(date) %>% arrange(date) %>% summarise(
+    # calculate cumulative cases and deaths for the U.S. on each day
+    # ignore missing values
+    all_cases = sum(cases, na.rm = T),
+    all_deaths = sum(deaths, na.rm = T)) %>% 
+
+  mutate(
+     # calculate new cases and deaths each day
+    new_cases = all_cases - lag(all_cases),
+    new_deaths = all_deaths - lag(all_deaths)) %>%
+  
+    # separate the date column into year, month and day in order to filter 
+  # out the date during Mar. 2020 -- Jan. 2021
+   separate(date, into = c("year", "month", "day")) %>%
+  filter( ((year == "2020")&(!(month %in% c("01", "02")))) | 
+            ((year == "2021")&(month == "01")&(day <= 18)) ) %>%
+    
+     # calculate a seven-day rolling average, and return NA for days where 
+     # the seven-day rolling average can't be calculated
+    mutate(new_cases_7dayavg = rollmean(new_cases, k = 7, fill = NA),
+           new_deaths_7dayavg = rollmean(new_deaths, k = 7, fill = NA)
+      ) %>% 
+  
+  # put the date back again
+  unite(col = date, year, month, day, sep = "-") 
+
+
+## create the plot 
+plot_task1 <- ggplot(df_task1) +
+  
+  # create the histogram for new cases each day
+  geom_histogram(aes(x = date, y = new_cases, fill = "pink", alpha = 0.6),
+                stat = "identity") +
+  
+  # create the 7-day rolling average
+  geom_line(aes(x = date, y = new_cases_7dayavg, group = 1), color = "firebrick3",
+              method = "loess", se = F, size = 0.8) +
+  
+  # create title and label x- and y-axis
+  labs(title = "Coronavirus in the U.S.: Latest Map and Case Count",
+       subtitle = "Updated January 18, 2021", 
+       y = "Cases", x = "Date") +
+  scale_x_discrete(
+    breaks = c("2020-03-01", "2020-04-01", "2020-05-01", "2020-06-01", "2020-07-01",
+               "2020-08-01", "2020-09-01", "2020-10-01", "2020-11-01", "2020-12-01",
+               "2021-01-01"),
+    labels = c("Mar.2020", "Apr.", "May", "Jun.", "Jul.", "Aug.", "Sept.", "Oct.",
+               "Nov.", "Dec.", "Jan.2021"), expand = c(0,0)) +
+  scale_y_continuous(
+    breaks = c(0, 100000, 200000, 300000), 
+    labels = c("0", "100,000", "200,000", "300,000 cases"),
+    expand = c(0,0), limits = c(0, 350000)
+  ) +
+  theme_bw() +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_line(linetype = "dashed", color = "grey", 
+                                          size = 0.3),
+        axis.ticks.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.border = element_blank(),
+        axis.line.x = element_line(colour = "gray", size = 0.3, linetype = "solid"),
+        legend.position = "none") +
+  
+  # add text annotation about the line and histogram
+  geom_text(x = "2020-07-23", 
+            y = df_task1$new_cases[df_task1$date == "2020-07-23"]+20000,
+            label = "7-day average") +
+  geom_text(x = "2020-12-10", 
+            y = 300000,
+            label = "New cases")  +
+
+  geom_segment(x = "2020-07-23", xend = "2020-07-23",
+               y = df_task1$new_cases_7dayavg[df_task1$date == "2020-07-23"],
+               yend = df_task1$new_cases[df_task1$date == "2020-07-23"]+10000) +
+  geom_segment(x = "2021-01-01", xend = df_task1$date[which.max(df_task1$new_cases)],
+               y = 300000, yend = 300000)
+
+plot_task1
+
+# save the plot that I reproduced
+ggsave(filename = "task1.png", plot = plot_task1, 
+       path = "reproduced_figures", 
+       width = 20,
+       height = 10,
+       units = c("cm"))
+  
+```
+
+
 
 #### Task #2 
 Create the table of cases and deaths - the first table on the page, right below the figure you created in task #1. You don't need to include tests or hospitalizations. 
 
+____________________
 
-![](nyt2.png){ width=75% }
+### <span style="color: red;">My Code for task 2</span>
+
+```{r}
+# create data set for task 2 - new cases and death on Jan. 17, 2021
+df_task2_jan17 <- df_task1 %>% filter(date == "2021-01-17") %>% 
+  summarize(cases = sum(new_cases),
+            deaths = sum(new_deaths))
+
+# create data set for task 2 - cumulative cases and deaths on Jan. 17, 2021
+df_task2_total <- nyt %>% filter(date == "2021-01-17") %>%
+  summarize(cases = sum(cases, na.rm = T), deaths = sum(deaths, na.rm = T))
+
+# create data set for task 2 - 14-day change on Jan. 17, 2021
+df_task2_14dchange <- rbind(
+  # 14 day change = 7-day change on (2021-01-14 - 2020-12-30)/2021-01-14
+  paste(round(100*(df_task1$new_cases_7dayavg[df_task1$date == "2021-01-14"] - 
+  df_task1$new_cases_7dayavg[df_task1$date =="2020-12-30"])/
+  df_task1$new_cases_7dayavg[df_task1$date == "2021-01-14"],0), "%", sep = ""),
+  
+  paste(round(100*(df_task1$new_deaths_7dayavg[df_task1$date == "2021-01-14"] - 
+  df_task1$new_deaths_7dayavg[df_task1$date =="2020-12-30"])/
+  df_task1$new_deaths_7dayavg[df_task1$date == "2021-01-14"],0), "%", sep = "")
+)
+
+
+# create table for task 2
+df_task2 <- data.frame(total = format(t(df_task2_total), format = "d", big.mark=","),
+                       jan17 = format(t(df_task2_jan17), format ="d",big.mark=","),
+                       change = df_task2_14dchange)
+colnames(df_task2) <- c("Total reported", "On Jan. 17", "14-Day change")
+rownames(df_task2) <- c("Cases", "Deaths")
+
+table_task2 <- df_task2 %>% kable("html") %>% kable_classic() %>%
+  row_spec(0, bold = T) %>% column_spec(1, bold = T) %>%
+  kable_styling(full_width = F)
+
+table_task2
+
+# save the table
+save_kable(table_task2, "reproduced_figures/task2.png", zoom = 1.5)
+
+```
+
+
+
+
+![](original_figures/nyt2.png){ width=75% }
 
 #### Task #3
 Create the county-level map for previous week ('Hot spots') - the second plot on the page (only the 'Hot Spots' plot). You don't need to include state names and can use a different color palette. 
 
 
-![](nyt3.png){ width=85% }
+![](original_figures/nyt3.png){ width=85% }
 
 Code to wrangle county population data and map data.
 
@@ -157,7 +311,7 @@ AllCounty %>% ggplot(aes(x = long, y = lat, group = group)) +
 Create the table of **cases** by state - the second table on the page (do not need to include per 100,000, 14-day change, or fully vaccinated columns).
 
 
-![](nyt4.png)
+![](original_figures/nyt4.png)
 
 #### Task #5
 
