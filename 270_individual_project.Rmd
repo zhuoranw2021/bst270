@@ -299,18 +299,24 @@ head(nyt_task3)
 nyt_task3_1 <- nyt_task3 %>% 
   
   # calculate new daily cases
-  group_by(subregion, region) %>% 
-  arrange(date) %>% 
+  group_by(region, subregion) %>% 
+  
+  # calculate daily cases
+  arrange(date) %>%
   mutate(new_cases = cases - lag(cases)) %>%
+
+  # filter data for the past week of 2022-01-12
+  filter(date %in% c("2022-01-06", "2022-01-07", "2022-01-08", "2022-01-09",
+                     "2022-01-10", "2022-01-11", "2022-01-12") ) %>% 
   
-  # filter data for 2022-01-12
-  filter(date == "2022-01-12") %>% 
-  
+  # merge population info
   left_join(county_pop,  by = c("region", "subregion")) %>%
   
   # calculate daily average cases for 100,000 people for each subregion
-  mutate(avg_cases = new_cases/population*100000) 
+  mutate(avg_cases = mean(new_cases, na.rm = T)/population*100000) %>%
+  filter(date == "2022-01-12")
   
+head(nyt_task3_1)
 ```
 
 #### <span style="color: red;">My Code for task 3: merge daily average per 100k people with the counties data frame </span>
@@ -320,14 +326,31 @@ nyt_task3_1 <- nyt_task3 %>%
 
 nyt_task3_2 <- nyt_task3_1 %>% select(!c(fips, deaths, population)) %>%
   left_join(counties, by = c("region", "subregion")) %>% 
-  mutate(avg_cases_group = ceiling(avg_cases/15),
-         avg_cases_group = ifelse(avg_cases_group > 10 & avg_cases_group <= 25, 
-                                  11, avg_cases_group),
-         avg_cases_group = ifelse(avg_cases_group > 25, 12, avg_cases_group),
-          avg_cases_group = ifelse(avg_cases_group <= 0 | 
-                                     is.na(avg_cases_group), 0, avg_cases_group)#,
-         #avg_cases_group = as.factor(avg_cases_group)
-         ) 
+  mutate(avg_cases_group = ceiling(avg_cases/10),
+         avg_cases_group = ifelse(avg_cases > 70 & avg_cases <= 85, 
+                                  8, avg_cases_group),
+         avg_cases_group = ifelse(avg_cases > 85 & avg_cases <= 100, 
+                                  9, avg_cases_group),
+          avg_cases_group = ifelse(avg_cases > 100 & avg_cases <= 175,
+                                   10, avg_cases_group),
+         avg_cases_group = ifelse(avg_cases > 175 & avg_cases <= 250,
+                                   11, avg_cases_group),
+         avg_cases_group = ifelse(avg_cases > 250,
+                                   12, avg_cases_group),
+         avg_cases_group = ifelse(avg_cases <= 0 | is.na(avg_cases),
+                                   0, avg_cases_group),
+         ) %>% mutate(
+           avg_cases_group = 
+             recode(avg_cases_group, `0` = "Few or no cases", `1` = "1 - 10",
+                    `2` = "11 - 20", `3` = "21 - 30", `4` = "31 - 40", 
+                    `5` = "41 - 50", `6` = "51 - 60", `7` = "61 - 70",
+                    `8` = "71 - 85", `9` = "86 - 100", `10` = "101 - 175",
+                    `11` = "176 - 250", `12` = "> 250")
+         ) %>%
+      mutate(avg_cases_group = factor(avg_cases_group, 
+            levels = c("Few or no cases", "1 - 10", "11 - 20", "21 - 30", "31 - 40", 
+            "41 - 50", "51 - 60", "61 - 70", "71 - 85", "86 - 100", "101 - 175",
+            "176 - 250",  "> 250")))
   
 
 head(nyt_task3_2)
@@ -340,6 +363,7 @@ AllCounty <- map_data("county")
 AllCounty %>% ggplot(aes(x = long, y = lat, group = group)) +
               geom_polygon(color = "red", fill = NA, size = .1 )
 ```
+
 #### <span style="color: red;">My Code for task 3: create the map </span>
 
 ```{r}
@@ -347,11 +371,27 @@ plot_task3 <- nyt_task3_2 %>% ggplot(aes(x = long, y = lat, group = group)) +
               #geom_polygon(color = "red", fill = NA, size = .1 ) +
 geom_polygon(color = "white", aes(fill =avg_cases_group), size = 0,
              data = nyt_task3_2)  +
-  scale_fill_viridis_c() +
-  theme_void()
-
-
+  theme_void() +
+  labs(title = "Hot spots",
+       subtitle = "Average daily cases per 100,000 people in past week of 2022-01-12") +
+  scale_fill_manual(
+    values = c("Few or no cases" = "#ecebe3", "1 - 10"= "#f2df91",
+    "11 - 20" = "#f9c468", "21 - 30" = "#ffa83d", "31 - 40" = "#ff8b23", 
+    "41 - 50" = "#fd6a0d",  "51 - 60" = "#f04f09", "61 - 70" = "#d8382e",
+    "71 - 85" = "#c62833", "86 - 100" = "#af1b43", "101 - 175" = "#8a1739",
+    "176 - 250" = "#701447", "> 250" = "#4c0e3e")) +
+  theme(legend.title = element_blank(),
+        plot.background = element_rect(fill = "white"),
+        plot.margin = margin(1,1,1,1, "cm"))
+  
 plot_task3
+
+# save the plot
+ggsave(filename = "plot_task3.png", plot = plot_task3, 
+       path = "reproduced_figures", 
+       width = 20,
+       height = 12,
+       units = c("cm"))
 
 ```
 
@@ -366,5 +406,9 @@ Create the table of **cases** by state - the second table on the page (do not ne
 #### Task #5
 
 Provide a brief critique of the reproducibility of the figures and tables you created in tasks 1-4. 
+
+
+_____________________
+
 
 
