@@ -298,7 +298,6 @@ head(nyt_task3)
 ```{r}
 nyt_task3_1 <- nyt_task3 %>% 
   
-  # calculate new daily cases
   group_by(region, subregion) %>% 
   
   # calculate daily cases
@@ -403,12 +402,99 @@ Create the table of **cases** by state - the second table on the page (do not ne
 
 ![](original_figures/nyt4.png)
 
+_______________________
+
+### <span style="color: red;">My Code for task 4</span>
+
+```{r, message=FALSE, warning=FALSE}
+# for each state
+nyt_task4_1 <- nyt %>% 
+  
+  # calculate total cases in a state each day
+  group_by(date, state) %>% 
+  summarize(all_cases = sum(cases, na.rm = T),
+            all_deaths = sum(deaths, na.rm = T)) %>% ungroup() %>%
+
+  # calculate daily cases
+  group_by(state) %>%
+  arrange(date) %>%
+  mutate(new_cases = all_cases - lag(all_cases),
+         new_deaths = all_deaths - lag(all_deaths)) %>% 
+  
+  # calculate daily average in the last seven day of 2022-01-12
+  filter(date %in% c("2022-01-06", "2022-01-07", "2022-01-08", "2022-01-09",
+                     "2022-01-10", "2022-01-11", "2022-01-12") ) %>% 
+  summarize(avg_cases = mean(new_cases, na.rm = T),
+         avg_deaths = mean(new_deaths, na.rm = T)) %>%
+  
+  # filter data in selected states
+  filter(state %in% c("Rhode Island", "New York", "Massachusetts", "New Jersey",
+                      "Delaware", "Florida", "Virgin Islands", "Vermont",
+                      "Utah", "Hawaii")) %>%
+  select(state, avg_cases, avg_deaths) 
+
+# for US
+nyt_task4_2 <- nyt %>% group_by(date) %>%
+  summarize(all_cases = sum(cases, na.rm = T), 
+            all_deaths = sum(deaths, na.rm = T)) %>%
+  
+  arrange(date) %>%
+  mutate(new_cases = all_cases - lag(all_cases),
+         new_deaths = all_deaths - lag(all_deaths)) %>% 
+  
+  # calculate daily average in the last seven day of 2022-01-12
+  filter(date %in% c("2022-01-06", "2022-01-07", "2022-01-08", "2022-01-09",
+                     "2022-01-10", "2022-01-11", "2022-01-12") ) %>% 
+  summarize(avg_cases = mean(new_cases, na.rm = T),
+         avg_deaths = mean(new_deaths, na.rm = T)) %>% 
+  mutate(state = "United States") %>% select(state, avg_cases, avg_deaths)
+
+
+nyt_task4 <- rbind(nyt_task4_1, nyt_task4_2) %>% 
+  
+  # round the daily average to the integer 
+  # round the daily deaths to the tenths
+  mutate(avg_cases = format(round(avg_cases, 0), format = "d", big.mark=","),
+         avg_deaths = round(avg_deaths, 1))
+
+
+
+# re-order the table
+nyt_task4 <- nyt_task4[c(11, 7, 6, 4, 5, 1, 2, 10, 9, 8, 3), ]
+
+# rename row and column
+colnames(nyt_task4) <- c(" ", "Daily average cases", "Daily average deaths")
+  
+table_task4 <- nyt_task4 %>% kable(caption = "State trends", "html", align = c("l", "r", "r")) %>% 
+  kable_classic() %>%
+  kable_styling(full_width = F) %>%
+  row_spec(0, bold = T) %>% column_spec(1, bold = T)
+
+table_task4
+
+# save the table
+save_kable(table_task4, "reproduced_figures/table_task4.png", zoom = 1.5,
+           bs_theme = "flatly")
+```
+
+
 #### Task #5
 
 Provide a brief critique of the reproducibility of the figures and tables you created in tasks 1-4. 
 
-
 _____________________
+
+I think the reproducibility of task #1 and #4 is good, as I easily reproduced them. 
+
+For task #1, I noticed that some bars are marked in yellow instead of pink, and they said these are "day with reporting anomaly," while I was not able to find this information in the data set. 
+
+For task #4, the number for United States I produced is not the same as theirs. I guess this is because some region in the data set are not considered as U.S. territory. As a foreigner myself, I am not sure which one(s) to include/exclude. The daily average death at Hawaii is also inconsistent. I do not know the reason, as the number for other states are the same. Not sure what's wrong with this state. 
+
+The reproducibility of task #2 and and #3 is not very good, and I can only reproduce some of the numbers. 
+
+For task 2, I am confused about how they calculated the "14-Day change." They said that "14-day change trends use 7-day averages" but I failed to find exactly how they used the information. I tried multiple ways to calculate it but the numbers I got are close to theirs but not the same. For the total reported cases on Jan. 17, my number is higher than theirs, which I think is because they used the data updated on 7:56 AM ET, Jan. 18, 2021, while the data I access now are more complete.  
+
+For task 3, it is even more confusing. I am not sure what they mean by "average daily cases." I just assume that it means "new cases on that day." The final map I created is very different from theirs. I am not sure whether they used the data on 2022-01-12, which is the date we were instructed to use. 
 
 
 
